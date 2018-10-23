@@ -1,0 +1,236 @@
+Title: Deduper Pseudocode
+Author: Mitchell Rezzonico
+Date: October 22, 2018
+
+Problem: One of the first steps in creating a next generation sequencing library is PCR amplification
+to create multiple copies of DNA fragments of interest. PCR duplicates are a phenomenon that occurs
+when two copies of the same original fragment get onto different primer lawns in a flowcell and become
+amplified. This erroneously inflates the coverage of reads and skews differential analysis.
+
+Solution: This program is intended to sort through a .sam file and remove any PCR duplicates. It will output
+the unique alignments in the proper SAM format in one file and the duplicate alignments in another file. It
+will also print out some nifty statistics about the .sam file that was read in.
+
+#######################################
+######### Argparse Statements #########
+#######################################
+
+-f, --file: required arg, absolute file path
+-p, --paired: optional arg, designates file is paired end (not single-end)
+-u, --umi: optional arg, designates file containing the list of UMIs (unset if randomers instead of UMIs)
+-s, --select: optional arg, designates how to select read if duplicates are found (takes first if not specified)
+-h, --help: optional arg, prints a useful help message
+
+Initialize UMI list - If there is an file with the list of UMIs, read it in as a list
+Initialize randomer list - empty list to store randomers (not sure if I want to include this yet)
+
+#######################################
+########### Example Inputs ############
+#######################################
+
+First unique read encountered
+NS500451:154:HWKTMBGXX:1:11101:24260:1121:CTGTTCAC	0	2
+500	36 71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEAEEAEEEEAAEEEEEEEEEAEEAEEAAEE<EEEEEEEEEAEEEEEEEAAEEAAAEAEEAEAE/	
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Different UMI, soft clipping shifts position 2 NT to the left - Unique
+NS500451:154:HWKTMBGXX:1:11101:18996:1145:ACTGATTT	0	2
+502	36	3S68M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:53G16	NH:i:1	HI:i:1	NM:i:2	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, soft clipping shifts position 2 NT to the left - Duplicate
+NS500451:154:HWKTMBGXX:1:11101:18996:1145:CTGTTCAC	0	2
+502	36	3S68M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:53G16	NH:i:1	HI:i:1	NM:i:2	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, different chr - Unique
+NS500451:154:HWKTMBGXX:1:11101:25533:1187:CTGTTCAC	0	4
+500	36	71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEAEEEEEEE<EEEEEEEEEEEEEEEEEEEE
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, same chr, different strand - Unique
+NS500451:154:HWKTMBGXX:1:11101:6251:1098:CTGTTCAC	000000010000	2
+500	36	71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+/<EEAEEEEEEEEAEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, same chr, same strand - Duplicate
+NS500451:154:HWKTMBGXX:1:11101:6251:1098:CTGTTCAC	0	2
+500	36	71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+/<EEAEEEEEEEEAEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+#######################################
+########### Example Output ############
+#######################################
+
+First unique read encountered
+NS500451:154:HWKTMBGXX:1:11101:24260:1121:CTGTTCAC	0	2
+500	36 71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEAEEAEEEEAAEEEEEEEEEAEEAEEAAEE<EEEEEEEEEAEEEEEEEAAEEAAAEAEEAEAE/	
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Different UMI, soft clipping shifts position 2 NT to the left - Unique
+NS500451:154:HWKTMBGXX:1:11101:18996:1145:ACTGATTT	0	2
+502	36	3S68M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:53G16	NH:i:1	HI:i:1	NM:i:2	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, different chr - Unique
+NS500451:154:HWKTMBGXX:1:11101:25533:1187:CTGTTCAC	0	4
+500	36	71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+6AEEEEEEEEEEEEEEEEEEEEEEEAEEEEEEEEEEEEEEEEAEEEEEEE<EEEEEEEEEEEEEEEEEEEE
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+Same UMI, same chr, different strand - Unique
+NS500451:154:HWKTMBGXX:1:11101:6251:1098:ATCCATGG	000000010000	2
+500	36	71M	*	0	0
+TCCACCACAATCTTACCATCCTTCCTCCAGACCACATCGCGTTCTTTGTTCAACTCACAGCTCAAGTACAA
+/<EEAEEEEEEEEAEEEEEEEEEEAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+
+#######################################
+######## High Level Functions #########
+#######################################
+
+define UMI_check(SAM[0][:-8]) -> bool:
+	'''
+	SAM[0][:-8]: UMI
+	returns: False if the UMI has been seen already, True if it has
+	'''
+	Isolates the UMI and references the set to see if it's in there
+
+
+define randomer_check??
+	Not sure if necessary yet..might throw this one out
+
+
+define chrom_check(SAM[4]: int) -> bool:
+	'''
+	SAM[4]: chromosome 
+	returns: False if the chromosome has been seen already, True if it has
+	'''
+	Isolates the chromosome and references the set to see if its in there
+
+
+define get_strand(FLAG:int) -> str:
+	'''
+	FLAG: SAM file flag
+	returns: + or - representing strandedness of alignment
+	''' 
+	Use bitwise operator to extract the strand and reference against the set
+
+	
+define corrected_5_prime_start(FLAG:int, POS:int, CIGAR:str) -> int:
+	'''
+	FLAG: bitwise flag
+	POS:  1-based leftmost mapping position
+	CIGAR: CIGAR string
+	returns: corrected 5' start position after CIGAR operations have been applied
+	'''
+	Check strandedness of the bitwise flag
+		If it's the sense (+) strand, do the following outlined below
+		If its the antisense (-) strand, move in the opposite direction
+	
+	If there is an M first, do nothing
+	If there is an S, check which side of the M its on
+		On the left of M:
+			decrease POS by amount of S
+		On the right on M and nothing else follows:
+			 do nothing
+		One the right of M and something follows:
+			shift accordingly
+	Only check for I if there is an S or it is the first item in the CIGAR string  
+	Only check for D if there is an S or it is the first item in the CIGAR string
+	
+	Overwrite the current POS with the new POS regardless if it was the original
+
+
+define position_check(POS:int) -> bool:
+	'''
+	POS: the adjusted position output by corrected_5_prime_start
+	returns: False if the position is in the set, True if not
+	'''
+	Note: Can only be ran after accounting for adjustments in CIGAR string
+	Searches the set for the adjusted position output  
+	
+#######################################
+######### Open Output Files ###########
+#######################################	
+
+open output file for all unique alignment in write mode with “_deduped” appended to the file name
+open output file for duplicated alignment in write mode
+
+#######################################
+##### Open Input, Grab Uniques ########
+#######################################	
+Remember: samtools sorts by chrom, then by position
+
+initialize a counter to tracks instances of duplicates
+initialize a counter to total number of SAM files seen
+
+create an empty global set called uniq_reads to hold reads that have been seen and are unique = [("")]
+
+open the file as f
+	while true loop to read files
+		SAM = f.readline, numpy split to optimize space and decrease runtime
+		set_SAM = stores the SAM files items that are actually of relevance - this is what the functions will check against
+		This will look something like CTGTTCAC_1_500_+, tracking the UMI, chromosome, position, and strand
+				
+		Initialize isDup variable and set = False
+		
+		If there is an UMI list
+			if line[0] == '@':
+				# skip header lines 
+				continue
+			Check if the UMI is legitimate - ie it's in the UMI list
+			Note: This should leave only SAM files with the original 96 UMIs
+		
+			Check if the current set_SAM items match whatever is currently in the set 
+				If nothing matches, it must be unique - immediately write out to the unique file
+		
+			Call UMI_check function
+			
+			Call chrom_check function 
+			
+			If the same chromosome no longer appears (ie we've moved to chr2 instead of chr1)
+				Note: No point of keeping an old chromsome if we've moved on
+				Wipe the set to save space with uniq_reads = [("")]
+			
+			Call get_strand function
+			
+			Call corrected_5_prime_start function
+			
+			Call position_check function
+			
+			If the isDup variable gets set to True at any point during the checks, it will be detected here
+				Write out to the duplicated alignment file
+			
+			Otherwise, if the isDup variable is still False after the checks, it must be unique
+				Write out to the unique alignment file
+			
+		If there is not an UMI list (not sure if I want to include yet)
+			Check if the randomer is in the UMI list (the first one will never be)
+			If the randomer is not already in the list, add it
+				Otherwise, skip
+			If I do incorporate this into the final code, it'll contain pretty much all of the above steps
+		
+		
+close the files	
+		
+		
+			
+			
