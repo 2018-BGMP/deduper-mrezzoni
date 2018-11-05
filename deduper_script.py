@@ -25,7 +25,7 @@ paired = args.paired
 umi = args.umi
 
 if paired != None:
-        print("I suck and did not take the time to make this script capable of accepting paured end reads.")
+        print("I suck and did not take the time to make this script capable of accepting paired end reads.")
         sys.exit()
 
 #######################################
